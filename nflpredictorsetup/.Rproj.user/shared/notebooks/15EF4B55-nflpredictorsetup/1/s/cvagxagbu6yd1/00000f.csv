@@ -1,0 +1,4 @@
+"0","# to read in our csv data "
+"0","# also drops unneeded counter column"
+"0","nfl_bet <- suppressMessages(read_csv(""nfl_szn_2018_to_2019.csv"", "
+"0","    col_types = cols(...1 = col_skip())))"

@@ -1,0 +1,2 @@
+"0","# creates a subset of the data that excludes any games that ended in a tie"
+"0","nfl_bet <- subset(nfl_bet,Winner != ""Tie"")"

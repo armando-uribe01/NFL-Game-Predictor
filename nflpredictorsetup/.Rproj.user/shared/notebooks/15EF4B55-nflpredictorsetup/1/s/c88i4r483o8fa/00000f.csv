@@ -1,0 +1,7 @@
+"0","box <- ggplot(nfl_bet,aes(x=ml_h,y=winner, group=winner)) +"
+"0","  geom_boxplot(aes(fill = winner))+"
+"0","  theme_minimal()+"
+"0","  geom_jitter(alpha=0.5) +"
+"0","  theme(legend.position = ""top"") +"
+"0","  labs(x=""Moneyline Odds"")"
+"0","box"

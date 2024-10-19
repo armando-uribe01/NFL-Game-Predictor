@@ -1,0 +1,479 @@
+---
+title: "nflpredictorsetup"
+author: "Armando Uribe"
+date: "2024-10-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)            
+library(tidymodels)
+library(tidyr)
+library(tidyselect)
+library(tinytex)
+# for visual plots
+library(ggplot2)              
+# for plot themes/customization
+library(ggthemes)             
+# for a correlation plot
+library(corrplot)             
+library(corrr)
+# for KNN modeling
+library(kknn)
+# visualize missing data
+library(visdat)
+# creating tibbles
+library(tibble)
+library(astsa)
+library(stats)
+# for cleaning names
+library(janitor)
+#library(kableExtra)
+# for LDA and QDA models
+library(discrim)
+#library(readxl)
+library(readr)
+# for mutating and selecting data from the dataset
+library(dplyr)
+```
+
+![](nfl-schedule.jpg)
+
+
+# Introduction
+
+## Inspiration and Motive
+
+With the recent emergence of new online betting apps and websites, there has been an overall growing interest in the sports betting world. I myself have used some of these sports betting outlets, legally of course, and gained in interest in the use of statistics in combination with betting odds to potentially predict the winner of an NFL game.
+
+Therefore, the main goal of this project is to attempt to build a machine learning model that has the ability to predict whether the home or visiting team will win an NFL game using a binary classification model.
+
+## Data Description
+
+Due to my own personal interest and involvement with sports betting, I combined historical data and statistics from multiple websites across the internet on my own in order to create a data set that had enough predictors and observations to be applied to a machine learning project of this style.
+
+This dataset, titled "nfl_szn_2018_to_2019.csv", is a csv file that includes all of the NFL regular season and playoff games played in the 2018 - 2019 NFL season.
+
+In terms of obtaining the data, I was able to get the historical betting odds, final score, and each game with respective date from: <https://www.sportsbookreviewsonline.com/scoresoddsarchives/nfl-odds-2018-19/>.
+
+For the rest of the historical data involving previous records and percentage I used: <https://www.pro-football-reference.com/years/2018/>. and added to the dataset using mutate in r.
+
+For running totals I used R to group and sum cumulatively using the R command `mutate`.
+
+For injuries I went week by week and manually inputted each team's number of injured players from: <https://www.nfl.com/injuries/league/2018/REG1>.
+
+## Project Outline
+
+Let's create a roadmap for how we will strive to reach our goal of predicting NFL games now that we have an initial grasp on the data we will be working with. This will be a multi-step process.
+
+This process begins with cleaning and organizing our data by making necessary data adjustments. In specific we will load the data set, check for missing data and tidying the data set.
+
+Then, we will examine how the data set and its predictor variables are constructed and related by way of its structure, summary, definition of variables, and visual EDA emphasizing plots, graphs, and correlation matrices.
+
+Next, we will split the data into training and testing sets, make a recipe, and set folds for cross-validation.
+
+Logistic Regression, K-Nearest Neighbors, Linear Discriminant Analysis, Quadratic Discriminant Analysis, Elastic Net - Lasso, Decision Trees, Random Forest, Boosted Trees and Support Vector Machine models will all be built and trained on the training we split. We will determine the best model for each model, analyze the results for all models, rank them by the performance metrics of `accuracy` and `roc_auc` values, and produce plots for each model. Lastly, fit the testing data set to the model with the best `roc_auc` value and the to model with the best `accuracy` value respectively. Hopefully either or both models will give us positive results and precisely predict the NFL games in the testing data set.
+
+# Exploring Our Data
+
+Let's begin this machine learning project by introducing our data, making any needed changes, and examining the different aspects of how our data is compiled in this specific data set. It is crucial that we understand each aspect of our data set in order to ensure we can interpret every part of our project.
+
+## Necessary Data Adjustments
+
+Before we can even begin our project and build anything we must first load in our data and make the necessary adjustments and checks to verify that our data is not only applicable to the project but is also organized and labelled in a way that makes the data easy to manipulate and analyze once we have completed more detailed and thorough steps.
+
+### Loading the Data
+
+To start, we will load in our data set without the counter column.
+
+```{r}
+# to read in our csv data 
+# also drops unneeded counter column
+nfl_bet <- suppressMessages(read_csv("nfl_szn_2018_to_2019.csv", 
+    col_types = cols(...1 = col_skip())))
+```
+
+### Checking Data for Missing Values
+
+Although I created this data set, it is always necessary to check for missing data. Missing data could create problems further down the line of our analysis, model building, and predicting.
+
+```{r}
+# plot of missing values in the data
+nfl_bet %>%
+  vis_dat()
+```
+
+From the visual representation of our data there does not seem to be any missing data. Just to be safe we will check all observations as well.
+
+```{r}
+sum(is.na(nfl_bet))
+```
+
+Perfect, we have zero observations with missing data.\n Let's move on to tidying and manipulating our data set.
+
+### Tidying the Data
+
+Once again, even though I created this data set there are still variables that need to be removed and certain tidying of the data that needs to take place before we can progress with our project.\n
+
+First, because we are only concerned with NFL games that finished with a winner, we will remove any NFL games that ended in a tie.
+
+```{r}
+# creates a subset of the data that excludes any games that ended in a tie
+nfl_bet <- subset(nfl_bet,Winner != "Tie")
+```
+
+Second, we will adjust the divisions so that the division column can be can be converted to a factor type.
+
+```{r}
+# converts each division into region of the United States
+nfl_bet <- nfl_bet %>%
+  mutate(Division_V = ifelse(Division_V == "AFCNorth", "North", Division_V)) %>%
+  mutate(Division_V = ifelse(Division_V == "AFCSouth", "South", Division_V)) %>%
+  mutate(Division_V = ifelse(Division_V == "AFCEast", "East", Division_V)) %>%
+  mutate(Division_V = ifelse(Division_V == "AFCWest", "West", Division_V)) %>%
+  mutate(Division_H = ifelse(Division_H == "AFCNorth", "North", Division_H)) %>%
+  mutate(Division_H = ifelse(Division_H == "AFCSouth", "South", Division_H)) %>%
+  mutate(Division_H = ifelse(Division_H == "AFCEast", "East", Division_H)) %>%
+  mutate(Division_H = ifelse(Division_H == "AFCWest", "West", Division_H)) %>%
+  mutate(Division_V = ifelse(Division_V == "NFCNorth", "North", Division_V)) %>%
+  mutate(Division_V = ifelse(Division_V == "NFCSouth", "South", Division_V)) %>%
+  mutate(Division_V = ifelse(Division_V == "NFCEast", "East", Division_V)) %>%
+  mutate(Division_V = ifelse(Division_V == "NFCWest", "West", Division_V)) %>%
+  mutate(Division_H = ifelse(Division_H == "NFCNorth", "North", Division_H)) %>%
+  mutate(Division_H = ifelse(Division_H == "NFCSouth", "South", Division_H)) %>%
+  mutate(Division_H = ifelse(Division_H == "NFCEast", "East", Division_H)) %>%
+  mutate(Division_H = ifelse(Division_H == "NFCWest", "West", Division_H))
+```
+
+Third, we will remove the `Date` and `Game_ID` columns because they are not needed predictors, nor do they help understand and analyze the data set for our concerns.
+
+```{r}
+# removes the Date and Game_ID column
+nfl_bet <- nfl_bet %>%
+  select(-Date) %>%
+  select(-GameID)
+```
+
+Fourth, we will clean the variable names by using `clean_names()` so that all of our data columns are uniform and easier to work with.
+
+```{r}
+# cleans up the variable names
+nfl_bet <- nfl_bet %>%
+  as_tibble() %>%
+  clean_names()
+```
+
+Fifth, we will convert all our variables, expect the NFL team names, that are character type into factor type so that they can we used as predictors.
+
+```{r}
+# converts the winner variable of each game from a character to a factor
+nfl_bet$winner <- nfl_bet$winner %>%
+  as.factor()
+# converts the same_div variable of each game from a character to a factor
+nfl_bet$same_div <- nfl_bet$same_div %>%
+  as.factor()
+# converts the same_conf variable of each game from a character to a factor
+nfl_bet$same_conf <- nfl_bet$same_conf %>%
+  as.factor()
+# converts the off_bye_wk_v variable of each game from a character to a factor
+nfl_bet$off_bye_wk_v <- nfl_bet$off_bye_wk_v %>%
+  as.factor()
+# converts the off_bye_wk_h variable of each game from a character to a factor
+nfl_bet$off_bye_wk_h <- nfl_bet$off_bye_wk_h %>%
+  as.factor()
+# converts the division_v variable of each game from a character to a factor
+nfl_bet$division_v <- nfl_bet$division_v %>%
+  as.factor()
+# converts the division_h variable of each game from a character to a factor
+nfl_bet$division_h <- nfl_bet$division_h %>%
+  as.factor()
+# converts the conference_h variable of each game from a character to a factor
+nfl_bet$conference_h <- nfl_bet$conference_h %>%
+  as.factor()
+# converts the conference_v variable of each game from a character to a factor
+nfl_bet$conference_v <- nfl_bet$conference_v %>%
+  as.factor()
+```
+
+Now our data has been adjusted correctly for the project and we will save it as an rda file using the R command `save()` so that it can be loaded into different R files for the model building process of this project.
+
+```{r}
+save(nfl_bet,file="nfl_bet.rda")
+```
+
+## Summary and Structure of Data
+
+Since our data has been adjusted correctly, we will examine the attributes, structure, and summary of our data.
+
+Below is a summary of our data:
+
+```{r}
+# looking at summary of data set
+nfl_bet %>%
+  summary()
+```
+
+Below is the distribution of our data:
+
+```{r}
+# looking at distribution of dataset
+nfl_bet %>%
+  str()
+```
+
+Below are the dimensions of our data:
+
+```{r}
+# dimensions of data
+nfl_bet %>% dim()
+```
+
+Thus, we can observe that our data set contains 264 observations with 38 columns.
+
+### Data Sample
+
+Finally, we will take a look at the first 10 rows of our data to visualize what our data looks like from a table perspective.
+
+```{r}
+head(nfl_bet)
+```
+
+## Variables of Our Data
+
+Let's define and explain each variable in our data set.\n Note that we have 1 response variable, 4 non-predictor variables, and 33 predictor variables.
+
+### Response Variable
+
+Definition of our Response Variable:\n - `winner`: The winner of each NFL game(either H for home team or V for visiting team)\n \n
+
+```{r}
+nfl_bet$winner %>%
+  summary()
+```
+
+We can see that the home team won 52 more games in the season than the visiting team. This will be further analyzed in the visual EDA of the response variable distribution.
+
+### Non-Predictor Variables
+
+Looking at our dimensions, we must note that not all columns will be used as predictors in our recipe.\n The variables that will not be used as predictors, but are necessary to understanding the data as a whole are: \n - `final_v`: The final score of the visiting team for each game. This will not be used as predictor because it will directly tell our model the outcome of each game. - `final_h`: The final score of the home team for each game. This will not be used as predictor because it will directly tell our model the outcome of each game. - `team_v`: The visiting team of each NFL game. This will not be used as a predictor because we want reduce the cardinality of our data set. - `team_h`: The home team of each NFL game. This will not be used as a predictor because we want reduce the cardinality of our data set.
+
+### Predictor Variables
+
+After denoting our response variable, the variables that will not be predictors, and removing unnecessary variables, we are left with 33 variables. Thus, we will have 33 predictor variables.\n \n Predictor Variables: \n
+1. `week`: NFL Week Number - The week number in which NFL game is played. There are 17 NFL weeks in the regular season along with playoffs which are 3 weeks long, resulting in 20 total weeks. \n
+2. `same_div`: Same NFL Division - This states if the two teams playing each game are in the same NFL division. There are 8 divisions in total. A value of 1 is returned if they are not in the same division and a value of 2 is returned if they are in the same division. \n
+3. `same_conf`: Same NFL Conference - This states if the two teams playing each game are in the same NFL conference. There are 2 conferences in total. A value of 1 is returned if they are not in the same conference and a value of 2 is returned if they are in the same conference. \n
+4. `ml_v`: Visitor Moneyline - This states the visiting NFL team's odds to win each game. A moneyline value of \< 0 means they having the better odds of winning the game. A moneyline value of \> 0 means they having the better odds of losing the game. \n
+5. `ml_h`: Home Moneyline - This states the home NFL team's odds to win each game. A moneyline value of \< 0 means they having the better odds of winning the game, or the favorite. A moneyline value of \> 0 means they having the better odds of losing the game, or the underdog. \n
+6. `injuries_v`: Visitor Injuries - This states the total number of injured players reported before each game for the visiting NFL team. \n
+7. `injuries_h`: Home Injuries - This states the total number of injured players reported before each game for the home NFL team. \n
+8. `division_v`: Visitor Division - This states the division in which the visiting NFL team is a member of. There are 8 unique divisions, NFC: North, South, East, & West as well as AFC: North. South, East, & West. However, for convenience, these divisions will just be referred to as North, South, East, and West. \n
+9. `division_h`: Home Division - This states the division in which the home NFL team is a member of. There are 8 unique divisions, NFC: North, South, East, & West as well as AFC: North. South, East, & West. However, for convenience, these divisions will just be referred to as North, South, East, and West. \n
+10. `conference_v`: Visitor Conference - This states the conference in which the visiting NFL team is a member of. There are 2 unique divisions: AFC & NFC. \n
+11. `conference_h`: Home Conference - This states the conference in which the home NFL team is a member of. There are 2 unique divisions: AFC & NFC. \n
+12. `szn_win_per_v`: Visitor Season Winning Percentage - This is a running total percentage that states the visiting NFL team's winning percentage for the entire NFL season leading up to each game. For each respective team it is (Total Games won)/(Total Games Played) \n
+13. `szn_win_per_h`: Home Season Winning Percentage - This is a running total percentage that states the home NFL team's winning percentage for the entire NFL season leading up to each game. For each respective team it is (Total Games won)/(Total Games Played) \n
+14. `ud_tot_v`: Visitor Underdog Total - This is a running total, leading up to each game, that states how many previous games in the entire NFL season the visiting NFL team has had better odds of losing the game at hand. \n
+15. `ud_tot_h`: Home Underdog Total - This is a running total, leading up to each game, that states how many previous games in the entire NFL season the home NFL team has had better odds of losing the game at hand. \n
+16. `fv_tot_v`: Visitor Favorite Total - This is a running total, leading up to each game, that states how many previous games in the entire NFL season the visiting NFL team has had better odds of winning the game at hand. \n
+17. `fv_tot_h`: Home Favorite Total - This is a running total, leading up to each game, that states how many previous games in the entire NFL season the home NFL team has had better odds of winning the game at hand. \n
+18. `ud_win_per_v`: Visitor Underdog Winning Percentage - This is a running total percentage, leading up to each game, that states how many previous games in the entire NFL season the visiting NFL team has had better odds of losing the game at hand and won. It is (Games won as underdog)/(Games played as underdog)  \n
+19. `ud_win_per_h`: Home Underdog Winning Percentage - This is a running total percentage, leading up to each game, that states how many previous games in the entire NFL season the home NFL team has had better odds of losing the game at hand and won. It is (Games won as underdog)/(Games played as underdog) \n
+20. `fv_win_per_v`: Visitor Favorite Winning Percentage - This is a running total percentage, leading up to each game, that states how many previous games in the entire NFL season the visiting NFL team has had better odds of winning the game at hand and won. It is (Games won as favorite)/(Games played as favorite)\n
+21. `fv_win_per_h`: Home Favorite Winning Percentage - This is a running total percentage, leading up to each game, that states how many previous games in the entire NFL season the home NFL team has had better odds of winning the game at hand and won. It is (Games won as favorite)/(Games played as favorite) \n
+22. `prev_win_rec_v`: Visitor Previous Win Record Before Game- This is the running total of NFL games the visiting NFL won in all previous games of the season. \n
+23. `prev_win_rec_h`: Home Previous Win Record Before Game- This is the running total of NFL games the Home NFL won in all previous games of the season. \n
+24. `prev_loss_rec_v`: Visitor Previous Season Loss Record Before Game - This is the running total of NFL games the visiting NFL lost in all previous games of the season. \n
+25. `prev_loss_rec_h`: Home Previous Season Loss Record Before Game - This is the running total of NFL games the Home NFL lost in all previous games of the season. \n
+26. `hc_win_per_v`: Visitor Head Coach Winning Percentage - This states the running total win percentage for the entire career of the visiting NFL team's head coach leading up to each game. It is calculated by (Games Won in Career as an NFL Head Coach)/(Games Coached in Career as an NFL Head Coach) \n
+27. `hc_win_per_h`: Home Head Coach Winning Percentage - This states the running total win percentage, for the entire career, of the home NFL team's head coach leading up to each game. It is calculated by (Games Won in Career as an NFL Head Coach)/(Games Coached in Career as an NFL Head Coach) \n
+28. `hc_g_v`: Visitor Head Coach Games Coached - This states the running total of games coached as an NFL head coach, for the entire career, of the visiting NFL team's head coach leading up to each game. \n
+29. `hc_g_h`: Home Head Coach Games Coached - This states the running total of games coached as an NFL head coach, for the entire career, of the home NFL team's head coach leading up to each game. \n
+30. `prev_szn_win_per_v`: Visitor Previous Season Win Percentage - This states the overall winning percentage of the visiting NFL in the previous season, 2017-2018. \n
+31. `prev_szn_win_per_h`: Home Previous Season Win Percentage - This states the overall winning percentage of the home NFL previous season, 2017-2018. \n
+32. `off_bye_wk_v`: Visitor Playing Off a Bye Week - This states if the visiting NFL team had a bye week (aka. did not play) the previous week before the game. This produces 1 if the visiting team did play an NFL game the previous week or 2 if the visiting team did not play an NFL game the previous week. \n
+33. `off_bye_wk_h`: Home Playing Off a Bye Week - This states if the home NFL team had a bye week (aka. did not play) the previous week before the game. This produces 1 if the home team did play an NFL game the previous week or 2 if the home team did not play an NFL game the previous week. \n
+
+## Visual EDA
+
+### Game Winner Distribution
+
+```{r}
+win_bar <- ggplot(nfl_bet, aes(x=winner)) +
+  geom_bar(color="black",
+           fill = "cyan") +
+  labs(x="Game Winner",y="# of Games Won",title="Distribution of the Number of Games Won by Home and Visiting Teams")
+win_bar
+```
+
+As we can see, we confirm from our summary computed of the response variable that 52 more games were won by the home team. That means that about 59.8% of games were won by the home team while only about 40.2% of games were won by the visiting team. This means that there is a significant 'home field advantage' in this NFL season which could be a crucial factor to consider when using predictive modeling and analysis.
+
+### Variable Correlation Plot
+
+To understand the relationships among our numerical variables, we will create a correlation matrix. Following that, we'll visualize these correlations using a heatmap, providing a clear graphical representation of how these predictors are related to each other.
+
+```{r fig.width=12, fig.height=12}
+nfl_bet %>%
+  select(-final_v,-final_h) %>%
+  select(where(is.numeric)) %>% # selecting numeric columns
+  cor() %>%
+  corrplot(method="color",type = "lower", diag = FALSE)
+```
+
+That may be a little to difficult to analyze as a heatmap, let's try a correlation with numbers instead so we can get a better numerical understanding of the correlations in our data set.
+
+```{r fig.width=12, fig.height=12}
+nfl_bet %>%
+  select(-final_v,-final_h) %>%
+  select(where(is.numeric)) %>% # selecting numeric columns
+  cor() %>%
+  corrplot(method="number",type = "lower", diag = FALSE)
+```
+
+Now we have a better plot to look at. It looks as though our strongest correlation is a negative correlation of -0.95 between our `ml_h` and `ml_v` predictors. This makes sense as there are very few instances where both teams have the same odds to win a game against each other. Thus, if either the home or visiting team has the better odds of winning the game then the opposing team would, in turn, have the worse odds of winning the game resulting in a very strong negative correlation. \n In terms of our next stongest correlation, we note that: - `prev_win_rec_h` and `fv_tot_h` \n - `prev_win_rec_v` and `fv_tot_v` \n are tied for the second strongest correlation with a positive correlation of 0.87. First off, this makes sense as if either the home or visiting team have above the average number of wins for the season, they would also have the most total games designated as the favorites to win. This is due to the fact that in a majority of instances, the team with more wins will be favored to win the game.\n To me, the most interesting part of this correlation plot is that the number of injuries, whether it be the home or visiting team, does not seem to have a strong correlation with any other variable. I had always thought the more injuries a team had going into a game would result in either worse odds to win the game or a worse overall record. \n
+
+### Moneyline Dependent Bar Plots
+
+Now we will create a few visualizations using the moneyline predictor to see how these odds influence the winner of each game.
+
+First, we have a barplot of games won when the home Team is the favorite, or favored to win.
+
+```{r}
+HV_ml_h_bar <- ggplot(nfl_bet, aes(x=winner,fill=ml_h<0)) +
+  geom_bar() +
+  ggtitle("Games Won When Home Team is Favored to Win") +
+  labs(fill = "Favorite = Home Team",x= "Game Winner",y= "# of Game Won")
+HV_ml_h_bar
+```
+
+Next, we have a barplot of games won when the visiting team is the favorite, favored to win.
+
+```{r}
+HV_ml_v_bar <- ggplot(nfl_bet, aes(x=winner,fill=ml_v<0)) +
+  geom_bar() +
+  ggtitle("Games Won When Visiting Team is Favored to Win") +
+  labs(fill = "Favorite = Visiting Team",x= "Game Winner",y= "# of Game Won")
+HV_ml_v_bar
+```
+
+### Moneyline Dependent Box Plot (with Jitter)
+
+```{r}
+box <- ggplot(nfl_bet,aes(x=ml_h,y=winner, group=winner)) +
+  geom_boxplot(aes(fill = winner))+
+  theme_minimal()+
+  geom_jitter(alpha=0.5) +
+  theme(legend.position = "top") +
+  labs(x="Moneyline Odds")
+box
+```
+
+### Week Dependent Bar Plot
+
+Here, we have a barplot of game winners in every week of the NFL season.
+
+```{r}
+week_bar <- ggplot(nfl_bet, aes(x=factor(week,levels=1:20),fill=winner)) +
+  geom_bar(position=position_dodge()) +
+  ggtitle("Games Winners Per Week") +
+  labs(x= "Week #",y= "# of Game Won")
+
+week_bar
+```
+
+### Previous Team Wins Before Game
+
+Below is a barplot of game winners when the previous number of games won is an influence.
+
+```{r}
+nfl_prev_win <- nfl_bet %>%
+  pivot_longer(cols = c(prev_win_rec_h, prev_win_rec_v), names_to = "prev_win_type", values_to = "prev_win")
+
+prev_win_bar <- ggplot(nfl_prev_win, aes(x=factor(prev_win,levels=0:14),fill=winner)) +
+  geom_bar(position=position_dodge()) +
+  ggtitle("Games Winners vs # of Previous Team Wins Before Game") +
+  labs(x= "# of Previous Team Wins Before Game",y= "# of Game Won")
+
+prev_win_bar
+```
+
+### Division Dependent Bar Plot
+
+Now, with this barplot we can see the distribution of wins in each specific NFL division.
+
+```{r}
+nfl_div <- nfl_bet %>%
+  pivot_longer(cols = c(division_h, division_v), names_to = "division_type", values_to = "division")
+
+div_bar <- ggplot(nfl_div, aes(x=division,fill=winner)) +
+  geom_bar(position=position_dodge()) +
+  ggtitle("Games Winners vs Division") +
+  labs(x= "Division",y= "# of Game Won")
+
+div_bar
+```
+
+### Conference Dependent Bar Plot
+
+Similar to the previous barplot, this is a distribution of games won in each specific NFL conference.
+
+```{r}
+nfl_cnf <- nfl_bet %>%
+  pivot_longer(cols = c(conference_h, conference_v), names_to = "conference_type", values_to = "conf")
+
+conf_bar <- ggplot(nfl_cnf, aes(x=conf,fill=winner)) +
+  geom_bar(position=position_dodge()) +
+  ggtitle("Games Winners vs Conference") +
+  labs(x= "Conference",y= "# of Game Won")
+
+conf_bar
+```
+
+### Injury Dependent Bar Plot
+
+Next is a barplot of how many games teams won dependent on how many injuries they reported before the game.
+
+```{r}
+nfl_inj <- nfl_bet %>%
+  pivot_longer(cols = c(injuries_h, injuries_v), names_to = "inj_type", values_to = "inj")
+
+inj_bar <- ggplot(nfl_inj, aes(x=factor(inj,levels=0:30),fill=winner)) +
+  geom_bar(position=position_dodge()) +
+  ggtitle("Games Winners vs # of Injuries") +
+  labs(x= "# of Injuries",y= "# of Game Won")
+
+inj_bar
+```
+
+### Total Games as Underdog Dependent Bar Plot
+
+Here, we have the number of games won dependent on the number of games they had already played as the underdog.
+
+```{r}
+nfl_ud <- nfl_bet %>%
+  pivot_longer(cols = c(ud_tot_h, ud_tot_v), names_to = "ud_type", values_to = "ud")
+
+ud_bar <- ggplot(nfl_ud, aes(x=factor(ud,levels=0:30),fill=winner)) +
+  geom_bar(position=position_dodge()) +
+  ggtitle("Games Winners vs # of Games as Underdog") +
+  labs(x= "# of Games as Underdog",y= "# of Game Won")
+
+ud_bar
+```
+
+### Total Games as Favorite Dependent Bar Plot
+
+Finally, we have the number of games won dependent on the number of games they had already played as the favorite.
+
+```{r}
+nfl_fv <- nfl_bet %>%
+  pivot_longer(cols = c(fv_tot_h, fv_tot_v), names_to = "fv_type", values_to = "fv")
+
+fv_bar <- ggplot(nfl_fv, aes(x=factor(fv,levels=0:30),fill=winner)) +
+  geom_bar(position=position_dodge()) +
+  ggtitle("Games Winners vs # of Games as Favorite") +
+  labs(x= "# of Games as Favorite",y= "# of Game Won")
+
+fv_bar
+```

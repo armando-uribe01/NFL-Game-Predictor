@@ -1,0 +1,5 @@
+"0","HV_ml_v_bar <- ggplot(nfl_bet, aes(x=winner,fill=ml_v<0)) +"
+"0","  geom_bar() +"
+"0","  ggtitle(""Games Won When Visiting Team is Favored to Win"") +"
+"0","  labs(fill = ""Favorite = Visiting Team"",x= ""Game Winner"",y= ""# of Game Won"")"
+"0","HV_ml_v_bar"

@@ -1,0 +1,5 @@
+"0","win_bar <- ggplot(nfl_bet, aes(x=winner)) +"
+"0","  geom_bar(color=""black"","
+"0","           fill = ""cyan"") +"
+"0","  labs(x=""Game Winner"",y=""# of Games Won"",title=""Distribution of the Number of Games Won by Home and Visiting Teams"")"
+"0","win_bar"

@@ -1,0 +1,3 @@
+"0","# plot of missing values in the data"
+"0","nfl_bet %>%"
+"0","  vis_dat()"

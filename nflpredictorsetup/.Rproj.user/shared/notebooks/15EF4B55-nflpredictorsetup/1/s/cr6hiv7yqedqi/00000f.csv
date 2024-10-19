@@ -1,0 +1,6 @@
+"0","week_bar <- ggplot(nfl_bet, aes(x=factor(week,levels=1:20),fill=winner)) +"
+"0","  geom_bar(position=position_dodge()) +"
+"0","  ggtitle(""Games Winners Per Week"") +"
+"0","  labs(x= ""Week #"",y= ""# of Game Won"")"
+"0",""
+"0","week_bar"

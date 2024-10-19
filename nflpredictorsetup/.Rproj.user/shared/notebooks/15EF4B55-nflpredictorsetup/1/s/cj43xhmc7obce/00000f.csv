@@ -1,0 +1,4 @@
+"0","# cleans up the variable names"
+"0","nfl_bet <- nfl_bet %>%"
+"0","  as_tibble() %>%"
+"0","  clean_names()"

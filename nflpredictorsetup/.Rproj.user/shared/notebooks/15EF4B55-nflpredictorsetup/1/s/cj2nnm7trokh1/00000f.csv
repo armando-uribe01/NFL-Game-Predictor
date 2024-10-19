@@ -1,0 +1,5 @@
+"0","nfl_bet %>%"
+"0","  select(-final_v,-final_h) %>%"
+"0","  select(where(is.numeric)) %>% # selecting numeric columns"
+"0","  cor() %>%"
+"0","  corrplot(method=""color"",type = ""lower"", diag = FALSE)"

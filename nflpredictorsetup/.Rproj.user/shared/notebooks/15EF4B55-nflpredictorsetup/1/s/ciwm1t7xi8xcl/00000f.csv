@@ -1,0 +1,4 @@
+"0","# removes the Date and Game_ID column"
+"0","nfl_bet <- nfl_bet %>%"
+"0","  select(-Date) %>%"
+"0","  select(-GameID)"
